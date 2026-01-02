@@ -37,7 +37,7 @@ def parse_arguments():
         '--interval',
         type=int,
         default=300,
-        help='Intervalo de regeneração em segundos (padrão: 300 = 5 minutos)'
+        help='Intervalo de reescaneamento em segundos (padrão: 300 = 5 minutos)'
     )
     parser.add_argument(
         '-host',
@@ -49,22 +49,25 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def regenerate_opds_periodically(generator, interval):
+def rescan_books_periodically(generator, interval):
     """
-    Thread que regenera o OPDS periodicamente.
+    Thread que reescaneia o diretório de livros periodicamente.
+    
+    O OPDS é gerado dinamicamente a cada requisição, mas precisamos
+    reescanear os livros para detectar novos arquivos ou remoções.
     
     Args:
         generator: Instância do OPDSGenerator
-        interval: Intervalo em segundos entre regenerações
+        interval: Intervalo em segundos entre escaneamentos
     """
     while True:
         time.sleep(interval)
-        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Regenerando OPDS...")
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Reescaneando diretório de livros...")
         try:
             generator.generate()
-            print("OPDS regenerado com sucesso!")
+            print(f"Escaneamento concluído! {len(generator.books_cache)} livros encontrados.")
         except Exception as e:
-            print(f"Erro ao regenerar OPDS: {e}")
+            print(f"Erro ao escanear livros: {e}")
 
 
 def main():
@@ -86,29 +89,30 @@ def main():
     print("=" * 60)
     print(f"Diretório de livros: {books_dir.absolute()}")
     print(f"Servidor HTTP: http://{args.host}:{args.port}")
-    print(f"Intervalo de regeneração: {args.interval} segundos")
+    print(f"Intervalo de reescaneamento: {args.interval} segundos")
     print("=" * 60)
     
     # Criar gerador OPDS
     generator = OPDSGenerator(books_dir, args.host, args.port)
     
     # Gerar OPDS inicial
-    print("\nGerando OPDS inicial...")
+    print("\nEscaneando livros pela primeira vez...")
     try:
         generator.generate()
-        print("OPDS gerado com sucesso!")
+        print(f"Escaneamento concluído! {len(generator.books_cache)} livros encontrados.")
     except Exception as e:
-        print(f"Erro ao gerar OPDS: {e}", file=sys.stderr)
+        print(f"Erro ao escanear livros: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Iniciar thread de regeneração periódica
-    regeneration_thread = threading.Thread(
-        target=regenerate_opds_periodically,
+    # Iniciar thread de reescaneamento periódico
+    rescan_thread = threading.Thread(
+        target=rescan_books_periodically,
         args=(generator, args.interval),
         daemon=True
     )
-    regeneration_thread.start()
-    print(f"\nThread de regeneração iniciada (intervalo: {args.interval}s)")
+    rescan_thread.start()
+    print(f"\nThread de reescaneamento iniciada (intervalo: {args.interval}s)")
+    print("O feed OPDS é gerado dinamicamente a cada requisição com URLs personalizadas.")
     
     # Iniciar servidor HTTP
     print(f"\nIniciando servidor HTTP em {args.host}:{args.port}...")

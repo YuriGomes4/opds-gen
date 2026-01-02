@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0] - 2026-01-02
+
+### Corrigido
+- **Encoding de URLs**: Resolvido problema "Bad request syntax" do KOReader com nomes de arquivos contendo espaços, acentos e caracteres especiais
+  - URLs agora são corretamente encodadas (ex: "Stephen King" → "Stephen%20King")
+  - Servidor atualizado para protocolo HTTP/1.1
+  - Adicionado tratamento robusto de erros com logs detalhados
+  - Suporte completo a nomes de arquivos em UTF-8
+
+### Melhorado
+- **Geração Dinâmica de OPDS**: O feed agora é gerado em tempo real a cada requisição (não há mais arquivo OPDS estático)
+- **Reescaneamento Inteligente**: Thread periódica agora apenas reescaneia o diretório de livros, não regera o OPDS completo
+- **Performance**: Melhor performance ao evitar regeneração desnecessária de XML
+- **Logs**: Adicionados logs detalhados para facilitar debugging
+
 ## [1.1.0] - 2026-01-02
 
 ### Corrigido

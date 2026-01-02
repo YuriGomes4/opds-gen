@@ -161,31 +161,34 @@ opds-gen/
 
 ## 🔧 Como Funciona
 
-1. **Escaneamento**: O sistema escaneia recursivamente o diretório de livros
-2. **Geração**: Cria um feed OPDS em formato XML com todos os livros encontrados
-3. **Servidor**: Inicia um servidor HTTP que serve:
-   - `/opds` - O feed OPDS atualizado **com URLs dinâmicas**
-   - `/books/*` - Os arquivos dos livros
-4. **Regeneração**: A cada N segundos (padrão: 300), o catálogo é regerado automaticamente
-5. **URLs Dinâmicas**: Quando um cliente acessa `/opds`, o servidor:
-   - Detecta o cabeçalho `Host` da requisição HTTP
+1. **Escaneamento Inicial**: O sistema escaneia recursivamente o diretório de livros na inicialização
+2. **Servidor HTTP**: Inicia um servidor que responde a:
+   - `/opds` - Gera o feed OPDS **dinamicamente em tempo real** com URLs personalizadas
+   - `/books/*` - Serve os arquivos dos livros com encoding correto
+3. **Reescaneamento Periódico**: A cada N segundos (padrão: 300), o sistema reescaneia o diretório para detectar:
+   - Novos livros adicionados
+   - Livros removidos
+   - Mudanças na estrutura de pastas
+4. **Geração Dinâmica**: Cada vez que um cliente acessa `/opds`:
+   - O servidor detecta o cabeçalho `Host` da requisição HTTP
    - Gera o feed OPDS em tempo real com URLs baseadas nesse host
+   - Aplica encoding correto (URL encode) para caracteres especiais (espaços, acentos, etc.)
    - Garante que todos os links funcionem corretamente para aquele cliente
 
 ### Exemplo de URLs Dinâmicas
 
 ```
 Cliente 1 acessa: http://192.168.1.100:8080/opds
-  → Recebe links: http://192.168.1.100:8080/books/...
+  → Recebe links: http://192.168.1.100:8080/books/Stephen%20King/It_%20A%20coisa.epub
 
 Cliente 2 acessa: http://servidor.local:8080/opds
-  → Recebe links: http://servidor.local:8080/books/...
+  → Recebe links: http://servidor.local:8080/books/Stephen%20King/It_%20A%20coisa.epub
 
 Cliente 3 acessa: http://10.0.0.5:8080/opds
-  → Recebe links: http://10.0.0.5:8080/books/...
+  → Recebe links: http://10.0.0.5:8080/books/Stephen%20King/It_%20A%20coisa.epub
 ```
 
-Todos recebem links funcionais, adaptados ao endereço que usaram!
+Todos recebem links funcionais com encoding correto, adaptados ao endereço que usaram!
 
 ## 📋 Formatos Suportados
 
