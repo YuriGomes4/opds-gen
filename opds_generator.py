@@ -4,6 +4,7 @@ Módulo para gerar feeds OPDS compatíveis com KOReader
 
 import os
 import mimetypes
+import urllib.parse
 from pathlib import Path
 from datetime import datetime
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -211,7 +212,11 @@ class OPDSGenerator:
             link_acquisition = SubElement(entry, 'link')
             link_acquisition.set('rel', 'http://opds-spec.org/acquisition')
             link_acquisition.set('type', book['mime_type'])
-            link_acquisition.set('href', f"{base_url}/books/{book['file_path']}")
+            
+            # Encodar a URL corretamente para caracteres especiais
+            # Usar quote com safe='/' para manter as barras
+            encoded_path = urllib.parse.quote(book['file_path'], safe='')
+            link_acquisition.set('href', f"{base_url}/books/{encoded_path}")
             
             # Adicionar tamanho do arquivo como atributo
             link_acquisition.set('length', str(book['file_size']))

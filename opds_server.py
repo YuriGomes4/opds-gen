@@ -11,6 +11,10 @@ from pathlib import Path
 class OPDSRequestHandler(SimpleHTTPRequestHandler):
     """Handler HTTP personalizado para servir OPDS e livros."""
     
+    # Aumentar o tamanho máximo da linha de requisição para suportar URLs longas
+    # e definir protocolo HTTP/1.1
+    protocol_version = 'HTTP/1.1'
+    
     def __init__(self, *args, books_dir=None, generator=None, **kwargs):
         """
         Inicializa o handler.
@@ -29,23 +33,35 @@ class OPDSRequestHandler(SimpleHTTPRequestHandler):
     
     def do_GET(self):
         """Processa requisições GET."""
-        # Parse URL
-        parsed_path = urllib.parse.urlparse(self.path)
-        path = urllib.parse.unquote(parsed_path.path)
-        
-        # Rota para o feed OPDS
-        if path == '/opds' or path == '/opds/':
-            self.serve_opds()
-        # Rota para livros
-        elif path.startswith('/books/'):
-            self.serve_book(path[7:])  # Remove '/books/'
-        # Rota raiz - redirecionar para OPDS
-        elif path == '/' or path == '':
-            self.send_response(302)
-            self.send_header('Location', '/opds')
-            self.end_headers()
-        else:
-            self.send_error(404, "Recurso não encontrado")
+        try:
+            # Parse URL - fazer decode completo
+            parsed_path = urllib.parse.urlparse(self.path)
+            
+            # Decodificar o caminho (converte %20 para espaço, etc)
+            path = urllib.parse.unquote(parsed_path.path, encoding='utf-8', errors='replace')
+            
+            # Log da requisição
+            print(f"[GET] Caminho requisitado: {path}")
+            
+            # Rota para o feed OPDS
+            if path == '/opds' or path == '/opds/':
+                self.serve_opds()
+            # Rota para livros
+            elif path.startswith('/books/'):
+                # Remove '/books/' e qualquer barra inicial extra
+                relative_path = path[7:].lstrip('/')
+                self.serve_book(relative_path)
+            # Rota raiz - redirecionar para OPDS
+            elif path == '/' or path == '':
+                self.send_response(302)
+                self.send_header('Location', '/opds')
+                self.end_headers()
+            else:
+                self.send_error(404, "Recurso não encontrado")
+        except Exception as e:
+            print(f"[ERRO] Erro ao processar requisição: {e}")
+            print(f"[ERRO] Caminho original: {self.path}")
+            self.send_error(500, f"Erro ao processar requisição: {str(e)}")
     
     def serve_opds(self):
         """Serve o feed OPDS com URLs personalizadas baseadas no Host da requisição."""
@@ -80,24 +96,36 @@ class OPDSRequestHandler(SimpleHTTPRequestHandler):
         Args:
             relative_path: Caminho relativo do livro
         """
-        # Construir caminho completo
-        book_path = self.books_dir / relative_path
-        
-        # Verificar se o arquivo existe e está dentro do diretório de livros
         try:
+            print(f"[BOOK] Servindo livro: {relative_path}")
+            
+            # Construir caminho completo
+            # Normalizar o caminho para lidar com diferentes separadores
+            relative_path = relative_path.replace('\\', '/')
+            book_path = self.books_dir / relative_path
+            
+            print(f"[BOOK] Caminho completo: {book_path}")
+            
+            # Resolver o caminho (resolve links simbólicos e ..)
             book_path = book_path.resolve()
             books_dir_resolved = self.books_dir.resolve()
             
+            print(f"[BOOK] Caminho resolvido: {book_path}")
+            print(f"[BOOK] Diretório base: {books_dir_resolved}")
+            
             # Verificação de segurança: garantir que o arquivo está dentro do diretório permitido
             if not str(book_path).startswith(str(books_dir_resolved)):
+                print(f"[ERRO] Tentativa de acesso fora do diretório permitido")
                 self.send_error(403, "Acesso negado")
                 return
             
             if not book_path.exists():
+                print(f"[ERRO] Arquivo não encontrado: {book_path}")
                 self.send_error(404, "Livro não encontrado")
                 return
             
             if not book_path.is_file():
+                print(f"[ERRO] Não é um arquivo: {book_path}")
                 self.send_error(400, "Recurso inválido")
                 return
             
@@ -105,18 +133,28 @@ class OPDSRequestHandler(SimpleHTTPRequestHandler):
             mime_type = self._get_mime_type(book_path)
             
             # Servir arquivo
+            file_size = book_path.stat().st_size
+            print(f"[BOOK] Enviando arquivo: {book_path.name} ({file_size} bytes, {mime_type})")
+            
             with open(book_path, 'rb') as f:
                 content = f.read()
             
             self.send_response(200)
             self.send_header('Content-Type', mime_type)
             self.send_header('Content-Length', len(content))
-            self.send_header('Content-Disposition', f'attachment; filename="{book_path.name}"')
+            # Encoding do nome do arquivo para o cabeçalho
+            filename_encoded = urllib.parse.quote(book_path.name.encode('utf-8'))
+            self.send_header('Content-Disposition', f'attachment; filename*=UTF-8\'\'{filename_encoded}')
+            self.send_header('Accept-Ranges', 'bytes')
             self.end_headers()
             self.wfile.write(content)
             
+            print(f"[BOOK] Arquivo enviado com sucesso!")
+            
         except Exception as e:
-            print(f"Erro ao servir livro '{relative_path}': {e}")
+            print(f"[ERRO] Erro ao servir livro '{relative_path}': {e}")
+            import traceback
+            traceback.print_exc()
             self.send_error(500, "Erro ao servir arquivo")
     
     def _get_mime_type(self, file_path):
