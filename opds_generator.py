@@ -39,7 +39,7 @@ class OPDSGenerator:
         self.books_dir = Path(books_dir)
         self.host = host
         self.port = port
-        self.base_url = f"http://{host}:{port}"
+        self.base_url = None  # Será definido dinamicamente
         self.opds_file = self.books_dir / '.opds_catalog.xml'
         self.books_cache = []
         
@@ -146,16 +146,22 @@ class OPDSGenerator:
         """
         return hashlib.md5(path.encode()).hexdigest()
     
-    def generate_opds_xml(self, books):
+    def generate_opds_xml(self, books, base_url=None):
         """
         Gera o XML do feed OPDS.
         
         Args:
             books: Lista de dicionários com informações dos livros
+            base_url: URL base para os links (ex: http://192.168.1.100:8080)
+                     Se None, usa um placeholder
             
         Returns:
             String com XML formatado
         """
+        # Se não foi fornecida uma URL base, usar placeholder
+        if base_url is None:
+            base_url = f"http://SERVER_IP:{self.port}"
+        
         # Criar elemento raiz
         feed = Element('feed')
         for key, value in self.NAMESPACES.items():
@@ -170,13 +176,13 @@ class OPDSGenerator:
         link_self = SubElement(feed, 'link')
         link_self.set('rel', 'self')
         link_self.set('type', 'application/atom+xml;profile=opds-catalog;kind=acquisition')
-        link_self.set('href', f'{self.base_url}/opds')
+        link_self.set('href', f'{base_url}/opds')
         
         # Link de início
         link_start = SubElement(feed, 'link')
         link_start.set('rel', 'start')
         link_start.set('type', 'application/atom+xml;profile=opds-catalog;kind=acquisition')
-        link_start.set('href', f'{self.base_url}/opds')
+        link_start.set('href', f'{base_url}/opds')
         
         # Adicionar cada livro como entry
         for book in sorted(books, key=lambda x: (x['category'], x['author'], x['title'])):
@@ -205,7 +211,7 @@ class OPDSGenerator:
             link_acquisition = SubElement(entry, 'link')
             link_acquisition.set('rel', 'http://opds-spec.org/acquisition')
             link_acquisition.set('type', book['mime_type'])
-            link_acquisition.set('href', f"{self.base_url}/books/{book['file_path']}")
+            link_acquisition.set('href', f"{base_url}/books/{book['file_path']}")
             
             # Adicionar tamanho do arquivo como atributo
             link_acquisition.set('length', str(book['file_size']))
@@ -216,11 +222,11 @@ class OPDSGenerator:
         return dom.toprettyxml(indent='  ', encoding='utf-8').decode('utf-8')
     
     def generate(self):
-        """Gera o feed OPDS e salva em arquivo."""
+        """Gera o feed OPDS e salva em arquivo (versão estática para cache)."""
         # Escanear livros
         self.books_cache = self.scan_books()
         
-        # Gerar XML
+        # Gerar XML com placeholder (apenas para referência)
         opds_xml = self.generate_opds_xml(self.books_cache)
         
         # Salvar arquivo
@@ -231,14 +237,15 @@ class OPDSGenerator:
         
         return self.opds_file
     
-    def get_opds_content(self):
+    def get_opds_content(self, base_url):
         """
-        Retorna o conteúdo do feed OPDS.
+        Retorna o conteúdo do feed OPDS com URLs personalizadas.
+        
+        Args:
+            base_url: URL base para gerar os links (ex: http://192.168.1.100:8080)
         
         Returns:
-            String com o conteúdo XML do feed
+            String com o conteúdo XML do feed personalizado
         """
-        if self.opds_file.exists():
-            with open(self.opds_file, 'r', encoding='utf-8') as f:
-                return f.read()
-        return None
+        # Gerar OPDS dinâmico com a URL correta
+        return self.generate_opds_xml(self.books_cache, base_url)

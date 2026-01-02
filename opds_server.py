@@ -48,8 +48,21 @@ class OPDSRequestHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "Recurso não encontrado")
     
     def serve_opds(self):
-        """Serve o feed OPDS."""
-        opds_content = self.generator.get_opds_content()
+        """Serve o feed OPDS com URLs personalizadas baseadas no Host da requisição."""
+        # Obter o Host do cabeçalho da requisição
+        host_header = self.headers.get('Host')
+        
+        if host_header:
+            # Usar o host da requisição (já inclui porta se fornecida)
+            base_url = f"http://{host_header}"
+        else:
+            # Fallback: tentar detectar o IP do servidor
+            # Pegar o IP da interface de rede que recebeu a conexão
+            server_ip = self.request.getsockname()[0]
+            base_url = f"http://{server_ip}:{self.generator.port}"
+        
+        # Gerar OPDS dinâmico com a URL correta
+        opds_content = self.generator.get_opds_content(base_url)
         
         if opds_content:
             self.send_response(200)

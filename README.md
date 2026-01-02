@@ -9,12 +9,24 @@ O OPDS Generator é uma ferramenta Python que escaneia um diretório de livros d
 ### Características
 
 - ✅ Geração automática de feed OPDS compatível com KOReader
+- ✅ **URLs dinâmicas**: Links gerados automaticamente baseados no host da requisição
 - ✅ Suporte a múltiplos formatos: EPUB, PDF, MOBI, AZW, AZW3, FB2, DJVU, CBZ, CBR, TXT
 - ✅ Regeneração automática do catálogo a cada 5 minutos (configurável)
 - ✅ Servidor HTTP integrado para servir o feed e os livros
 - ✅ Organização automática por categorias e autores
 - ✅ Detecção automática de metadados baseada na estrutura de diretórios
 - ✅ Zero dependências externas (apenas Python padrão)
+
+## 🌟 Destaque: URLs Dinâmicas
+
+O sistema agora gera **URLs personalizadas automaticamente** baseadas no endereço usado para acessar o servidor! Isso significa:
+
+- ✨ Não precisa configurar IP manualmente
+- ✨ Funciona automaticamente com qualquer interface de rede (Wi-Fi, Ethernet, VPN)
+- ✨ Downloads funcionam corretamente de qualquer dispositivo na rede
+- ✨ Cada cliente recebe links funcionais baseados em como ele acessou o servidor
+
+**Exemplo**: Se você acessa via `http://192.168.1.100:8080/opds`, todos os links no feed usarão `192.168.1.100:8080`. Se outro cliente acessa via `http://servidor.local:8080/opds`, os links usarão `servidor.local:8080`.
 
 ## 🚀 Instalação
 
@@ -152,9 +164,28 @@ opds-gen/
 1. **Escaneamento**: O sistema escaneia recursivamente o diretório de livros
 2. **Geração**: Cria um feed OPDS em formato XML com todos os livros encontrados
 3. **Servidor**: Inicia um servidor HTTP que serve:
-   - `/opds` - O feed OPDS atualizado
+   - `/opds` - O feed OPDS atualizado **com URLs dinâmicas**
    - `/books/*` - Os arquivos dos livros
 4. **Regeneração**: A cada N segundos (padrão: 300), o catálogo é regerado automaticamente
+5. **URLs Dinâmicas**: Quando um cliente acessa `/opds`, o servidor:
+   - Detecta o cabeçalho `Host` da requisição HTTP
+   - Gera o feed OPDS em tempo real com URLs baseadas nesse host
+   - Garante que todos os links funcionem corretamente para aquele cliente
+
+### Exemplo de URLs Dinâmicas
+
+```
+Cliente 1 acessa: http://192.168.1.100:8080/opds
+  → Recebe links: http://192.168.1.100:8080/books/...
+
+Cliente 2 acessa: http://servidor.local:8080/opds
+  → Recebe links: http://servidor.local:8080/books/...
+
+Cliente 3 acessa: http://10.0.0.5:8080/opds
+  → Recebe links: http://10.0.0.5:8080/books/...
+```
+
+Todos recebem links funcionais, adaptados ao endereço que usaram!
 
 ## 📋 Formatos Suportados
 
@@ -217,6 +248,10 @@ sudo systemctl start opds-gen
 
 ## 🐛 Solução de Problemas
 
+### ~~Links com 0.0.0.0 não funcionam~~ ✅ RESOLVIDO!
+
+**Este problema foi corrigido!** O sistema agora gera URLs dinâmicas automaticamente baseadas no host da requisição. Não é mais necessário configurar um IP específico.
+
 ### O servidor não inicia
 
 - Verifique se a porta não está em uso: `netstat -tuln | grep 8080`
@@ -226,6 +261,8 @@ sudo systemctl start opds-gen
 
 - Verifique se o servidor está rodando
 - Confirme que está usando o IP correto da máquina
+  - Linux/macOS: `ip addr` ou `ifconfig`
+  - Windows: `ipconfig`
 - Verifique se o firewall não está bloqueando a porta
 - Teste acessar `http://SEU_IP:PORTA/opds` em um navegador
 
@@ -234,6 +271,12 @@ sudo systemctl start opds-gen
 - Verifique se os arquivos têm extensões suportadas
 - Confirme que o diretório está correto
 - Aguarde alguns segundos para a regeneração do catálogo
+
+### Downloads falham
+
+- **Solução**: Este problema foi corrigido com as URLs dinâmicas!
+- Verifique se você pode acessar diretamente `http://SEU_IP:PORTA/books/caminho/livro.epub` em um navegador
+- Se o link funciona no navegador mas não no KOReader, tente recarregar o catálogo no KOReader
 
 ## 📜 Licença
 
