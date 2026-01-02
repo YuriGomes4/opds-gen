@@ -1,0 +1,44 @@
+[Unit]
+Description=OPDS Generator - Servidor de catálogo de livros para KOReader
+Documentation=https://github.com/YuriGomes4/opds-gen
+After=network.target
+
+[Service]
+Type=simple
+
+# IMPORTANTE: Ajuste o usuário e grupo para o seu usuário Linux
+User=yuri
+Group=yuri
+
+# IMPORTANTE: Ajuste para o caminho completo onde está o opds-gen
+WorkingDirectory=/home/yuri/Documentos/GitHub/opds-gen
+
+# IMPORTANTE: Ajuste os seguintes parâmetros:
+# - Caminho completo do python3 (use: which python3)
+# - Caminho completo do opds-gen.py
+# - -dir: diretório dos seus livros
+# - -port: porta desejada (padrão: 8080)
+# - -interval: intervalo de reescaneamento em segundos (padrão: 300 = 5 minutos)
+ExecStart=/usr/bin/python3 /home/yuri/Documentos/GitHub/opds-gen/opds-gen.py \
+          -dir /media/HD/Media/Livros \
+          -port 8080 \
+          -interval 300
+
+# Reiniciar automaticamente em caso de falha
+Restart=on-failure
+RestartSec=5s
+
+# Logs (visíveis com: sudo journalctl -u opds-gen -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=opds-gen
+
+# Opções de segurança (opcional - descomente se desejar)
+# NoNewPrivileges=true
+# PrivateTmp=true
+
+# Limites de recursos (opcional - descomente e ajuste se necessário)
+# LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
