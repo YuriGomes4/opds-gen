@@ -1,0 +1,190 @@
+"""
+Servidor HTTP para servir o feed OPDS e os arquivos de livros
+"""
+
+import os
+import urllib.parse
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+
+
+class OPDSRequestHandler(SimpleHTTPRequestHandler):
+    """Handler HTTP personalizado para servir OPDS e livros."""
+    
+    def __init__(self, *args, books_dir=None, generator=None, **kwargs):
+        """
+        Inicializa o handler.
+        
+        Args:
+            books_dir: Diretório contendo os livros
+            generator: Instância do OPDSGenerator
+        """
+        self.books_dir = books_dir
+        self.generator = generator
+        super().__init__(*args, **kwargs)
+    
+    def log_message(self, format, *args):
+        """Override para logar mensagens de forma mais limpa."""
+        print(f"[{self.log_date_time_string()}] {format % args}")
+    
+    def do_GET(self):
+        """Processa requisições GET."""
+        # Parse URL
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = urllib.parse.unquote(parsed_path.path)
+        
+        # Rota para o feed OPDS
+        if path == '/opds' or path == '/opds/':
+            self.serve_opds()
+        # Rota para livros
+        elif path.startswith('/books/'):
+            self.serve_book(path[7:])  # Remove '/books/'
+        # Rota raiz - redirecionar para OPDS
+        elif path == '/' or path == '':
+            self.send_response(302)
+            self.send_header('Location', '/opds')
+            self.end_headers()
+        else:
+            self.send_error(404, "Recurso não encontrado")
+    
+    def serve_opds(self):
+        """Serve o feed OPDS."""
+        opds_content = self.generator.get_opds_content()
+        
+        if opds_content:
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/atom+xml;profile=opds-catalog;kind=acquisition')
+            self.send_header('Content-Length', len(opds_content.encode('utf-8')))
+            self.end_headers()
+            self.wfile.write(opds_content.encode('utf-8'))
+        else:
+            self.send_error(500, "Feed OPDS não disponível")
+    
+    def serve_book(self, relative_path):
+        """
+        Serve um arquivo de livro.
+        
+        Args:
+            relative_path: Caminho relativo do livro
+        """
+        # Construir caminho completo
+        book_path = self.books_dir / relative_path
+        
+        # Verificar se o arquivo existe e está dentro do diretório de livros
+        try:
+            book_path = book_path.resolve()
+            books_dir_resolved = self.books_dir.resolve()
+            
+            # Verificação de segurança: garantir que o arquivo está dentro do diretório permitido
+            if not str(book_path).startswith(str(books_dir_resolved)):
+                self.send_error(403, "Acesso negado")
+                return
+            
+            if not book_path.exists():
+                self.send_error(404, "Livro não encontrado")
+                return
+            
+            if not book_path.is_file():
+                self.send_error(400, "Recurso inválido")
+                return
+            
+            # Determinar MIME type
+            mime_type = self._get_mime_type(book_path)
+            
+            # Servir arquivo
+            with open(book_path, 'rb') as f:
+                content = f.read()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', mime_type)
+            self.send_header('Content-Length', len(content))
+            self.send_header('Content-Disposition', f'attachment; filename="{book_path.name}"')
+            self.end_headers()
+            self.wfile.write(content)
+            
+        except Exception as e:
+            print(f"Erro ao servir livro '{relative_path}': {e}")
+            self.send_error(500, "Erro ao servir arquivo")
+    
+    def _get_mime_type(self, file_path):
+        """
+        Retorna o MIME type do arquivo.
+        
+        Args:
+            file_path: Caminho do arquivo
+            
+        Returns:
+            String com o MIME type
+        """
+        mime_map = {
+            '.epub': 'application/epub+zip',
+            '.pdf': 'application/pdf',
+            '.mobi': 'application/x-mobipocket-ebook',
+            '.azw': 'application/vnd.amazon.ebook',
+            '.azw3': 'application/vnd.amazon.ebook',
+            '.fb2': 'text/fb2+xml',
+            '.djvu': 'image/vnd.djvu',
+            '.cbz': 'application/x-cbz',
+            '.cbr': 'application/x-cbr',
+            '.txt': 'text/plain',
+        }
+        
+        ext = file_path.suffix.lower()
+        return mime_map.get(ext, 'application/octet-stream')
+
+
+class OPDSServer:
+    """Servidor HTTP para OPDS."""
+    
+    def __init__(self, books_dir, generator, host='0.0.0.0', port=8080):
+        """
+        Inicializa o servidor OPDS.
+        
+        Args:
+            books_dir: Diretório contendo os livros
+            generator: Instância do OPDSGenerator
+            host: Host para o servidor
+            port: Porta para o servidor
+        """
+        self.books_dir = Path(books_dir)
+        self.generator = generator
+        self.host = host
+        self.port = port
+        
+        # Criar handler com contexto
+        def handler(*args, **kwargs):
+            return OPDSRequestHandler(
+                *args,
+                books_dir=self.books_dir,
+                generator=self.generator,
+                **kwargs
+            )
+        
+        self.handler = handler
+        self.httpd = None
+    
+    def start(self):
+        """Inicia o servidor HTTP."""
+        self.httpd = HTTPServer((self.host, self.port), self.handler)
+        
+        print(f"\nServidor OPDS rodando em http://{self.host}:{self.port}")
+        print(f"Feed OPDS disponível em: http://{self.host}:{self.port}/opds")
+        print("\nNo KOReader:")
+        print(f"  1. Vá em 'Buscar' > 'Catálogo OPDS'")
+        print(f"  2. Adicione novo catálogo com URL: http://[SEU_IP]:{self.port}/opds")
+        print("\nPressione Ctrl+C para encerrar o servidor\n")
+        
+        try:
+            self.httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if self.httpd:
+                self.httpd.shutdown()
+                self.httpd.server_close()
+    
+    def stop(self):
+        """Para o servidor HTTP."""
+        if self.httpd:
+            self.httpd.shutdown()
+            self.httpd.server_close()
